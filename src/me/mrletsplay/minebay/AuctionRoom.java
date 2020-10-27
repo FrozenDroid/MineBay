@@ -2,15 +2,19 @@ package me.mrletsplay.minebay;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.math.BigDecimal;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
+import me.mrletsplay.minebay.utils.ItemUtils;
+import me.mrletsplay.mrcore.misc.Complex;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.configuration.serialization.ConfigurationSerializable;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemFlag;
@@ -22,6 +26,7 @@ import com.google.common.io.Files;
 import me.mrletsplay.mrcore.bukkitimpl.config.BukkitCustomConfig;
 import me.mrletsplay.mrcore.config.ConfigLoader;
 import me.mrletsplay.mrcore.misc.StringUtils;
+import org.yaml.snakeyaml.Yaml;
 
 public class AuctionRoom {
 
@@ -33,12 +38,14 @@ public class AuctionRoom {
 	private ItemStack icon;
 	private boolean isDefaultRoom, isPrivateRoom;
 	private List<String> playerList;
+	private List<ItemStack> whiteList;
 	
 	private File roomFile;
 	private BukkitCustomConfig roomConfig;
 	
 	@SuppressWarnings("deprecation")
 	public AuctionRoom(int id) {
+		this.roomID = id;
 		roomFile = new File(Main.pl.getDataFolder(), "AuctionRooms/" + id + ".yml");
 		roomConfig = ConfigLoader.loadConfigFromFile(new BukkitCustomConfig(roomFile), roomFile, true);
 		this.owner = roomConfig.getString("owner");
@@ -64,7 +71,28 @@ public class AuctionRoom {
 		this.isDefaultRoom = roomConfig.getBoolean("default-room");
 		this.isPrivateRoom = roomConfig.getBoolean("private-room");
 		this.playerList = roomConfig.getStringList("player-list", new ArrayList<>(), false);
-		this.roomID = id;
+		File whitelistFile = new File(this.roomFile.getParent() + "/" + this.roomID + "-whitelist.yml");
+		if (!whitelistFile.exists()) {
+			try {
+				whitelistFile.createNewFile();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		FileConfiguration whitelist = YamlConfiguration.loadConfiguration(whitelistFile);
+		this.whiteList = (List<ItemStack>) whitelist.get("whitelist", this.whiteList);
+//		this.whiteList = ((List<HashMap<String, Object>>) roomConfig.toMap().get("whitelist")).stream().map(map -> {
+//			try {
+//				return ItemUtils.deserialize(map);
+//			} catch (IllegalAccessException e) {
+//				e.printStackTrace();
+//			} catch (InvocationTargetException e) {
+//				e.printStackTrace();
+//			}
+//			return null;
+//		}).collect(Collectors.toList());
+		this.whiteList.forEach(item -> System.out.println(item.hasItemMeta()));
+		System.out.println(this.whiteList.size());
 		if(s) saveAllSettings();
 	}
 	
@@ -95,6 +123,28 @@ public class AuctionRoom {
 		roomConfig.set("default-room", isDefaultRoom);
 		roomConfig.set("private-room", isPrivateRoom);
 		roomConfig.set("player-list", playerList);
+//		roomConfig.set("whitelist", this.whiteList.stream().map(ItemStack::serialize).map(stringObjectMap -> stringObjectMap.entrySet().stream().map(stringObjectEntry -> {
+//			if(stringObjectEntry.getValue() instanceof ConfigurationSerializable) {
+//				stringObjectEntry.setValue(((ConfigurationSerializable) stringObjectEntry.getValue()).serialize());
+//			}
+//			return stringObjectEntry;
+//		}).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (prev, next) -> next, HashMap::new))).collect(Collectors.toList()));
+		File whitelistFile = new File(this.roomFile.getParent() + "/" + this.roomID + "-whitelist.yml");
+		if (!whitelistFile.exists()) {
+			try {
+				whitelistFile.createNewFile();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		FileConfiguration whitelist = YamlConfiguration.loadConfiguration(whitelistFile);
+		whitelist.set("whitelist", this.whiteList);
+		try {
+			whitelist.save(whitelistFile);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+//		roomConfig.set("whitelist", this.whiteList.stream().map(ItemUtils::serialize).collect(Collectors.toList()));
 		saveRoomConfig();
 	}
 	
@@ -357,5 +407,8 @@ public class AuctionRoom {
 		}
 		return false;
 	}
-	
+
+	public List<ItemStack> getWhiteList() {
+		return whiteList;
+	}
 }
